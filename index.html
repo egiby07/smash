@@ -173,6 +173,7 @@ function createBuilding(data, index) {
     group, name: buildingNames[index % buildingNames.length],
     x, z, width, depth, height, color, alive: true, pending: false
   };
+  group.userData.building = building;
   buildings.push(building);
 }
 
@@ -727,13 +728,29 @@ function updateAction(action, dt) {
       }
     }
 
-    if (tool !== 'fire' && p >= 1 && !action.impacted) beginImpact(action);
+    if (tool === 'nuke' && p >= 1 && !action.impacted) {
+      beginImpact(action);
+      action.blast = addActionNode(action, makeOrb(0xffc65c, 1.2, true));
+      action.blast.position.set(action.target.x, 2, action.target.z);
+    } else if (tool !== 'fire' && tool !== 'nuke' && p >= 1 && !action.impacted) {
+      beginImpact(action);
+    }
     if (tool === 'fire' && action.burning) {
       action.nodes.slice(1).forEach((flame, index) => {
         flame.position.y += Math.sin(t * 15 + index) * dt * 1.8;
         flame.scale.setScalar(0.85 + Math.sin(t * 18 + index) * 0.18);
       });
       if (t - action.burnStart >= 0.62) beginImpact(action);
+    }
+    if (tool === 'nuke' && action.impacted) {
+      updateWave(action, dt);
+      if (action.blast) {
+        const blastProgress = THREE.MathUtils.clamp(
+          (t - action.impactTime) / 0.85, 0, 1
+        );
+        action.blast.scale.setScalar(1 + blastProgress * 12);
+        action.blast.material.opacity = Math.max(0, 0.55 * (1 - blastProgress));
+      }
     }
   } else if (tool === 'bat') {
     const p = THREE.MathUtils.clamp(t / 0.62, 0, 1);
@@ -786,19 +803,6 @@ function updateAction(action, dt) {
       });
       if (t >= 1.38) beginImpact(action);
     }
-  } else if (tool === 'nuke' && action.impacted) {
-    const progress = THREE.MathUtils.clamp((t - action.impactTime) / 0.85, 0, 1);
-    updateWave(action, dt);
-    if (action.blast) {
-      action.blast.scale.setScalar(1 + progress * 12);
-      action.blast.material.opacity = Math.max(0, 0.55 * (1 - progress));
-    }
-  }
-
-  if (tool === 'nuke' && t >= 1.08 && !action.impacted) {
-    beginImpact(action);
-    action.blast = addActionNode(action, makeOrb(0xffc65c, 1.2, true));
-    action.blast.position.set(action.target.x, 2, action.target.z);
   }
 
   if (t >= action.duration) {
